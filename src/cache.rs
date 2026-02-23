@@ -5,6 +5,9 @@ use ormlite::Connection;
 use std::error::Error;
 use std::path::PathBuf;
 
+use sqlx::migrate::Migrator;
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
+
 
 #[derive(Debug)]
 pub struct Cache {
@@ -24,18 +27,18 @@ impl Cache {
         }
     }
 
-    pub fn merge(&mut self, other: &Cache) {
+    pub fn _merge(&mut self, other: &Cache) {
         self.frequency += other.frequency;
         self.last_visited = other.last_visited;
     }
 }
 
-pub fn collect_cache(path: &PathBuf, cache_vector: &mut Vec<Cache>) {
+pub fn _collect_cache(path: &PathBuf, cache_vector: &mut Vec<Cache>) {
     let new_cache = Cache::new(path);
 
     for cache in cache_vector.iter_mut() {
         if cache.path == *path {
-            cache.merge(&new_cache);
+            cache._merge(&new_cache);
             return;
         }
     }
@@ -55,10 +58,20 @@ pub struct StoredCache {
     pub last_visited: DateTime<Utc>,
 }
 
+pub async fn initialize_db() -> Result<(), Box<dyn Error>> {
+   let mut conn = SqliteConnection::connect(&get_db_url()).await?;
+    MIGRATOR.run(&mut conn).await?;
+    Ok(())
+}
+
+fn get_db_url() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/gideon".to_string());
+    format!("sqlite://{}/jump.db", home)
+}
 
 pub async fn store_cache(cache_vector: Vec<Cache>) -> Result<(), Box<dyn Error>> {
     
-    let mut conn = SqliteConnection::connect("sqlite:///home/gideon/jump.db").await?;
+    let mut conn = SqliteConnection::connect(&get_db_url()).await?;
     let mut tx = conn.begin().await?;
 
     for entry in cache_vector {
@@ -87,11 +100,19 @@ pub async fn store_cache(cache_vector: Vec<Cache>) -> Result<(), Box<dyn Error>>
 }
 
 pub async fn fetch_cache() -> Result<Vec<StoredCache>, Box<dyn Error>> {
-    let mut conn = SqliteConnection::connect("sqlite:///home/gideon/jump.db").await?;
+    let mut conn = SqliteConnection::connect(&get_db_url()).await?;
     
     let cache = StoredCache::select()
         .fetch_all(&mut conn)
         .await?;
 
     Ok(cache)
+}
+// cache.rs
+pub async fn cleanup_old_entries() -> Result<(), Box<dyn Error>> {
+    let mut conn = SqliteConnection::connect(&get_db_url()).await?;
+    ormlite::query!("DELETE FROM store_cache WHERE last_visited < datetime('now', '-30 days')")
+        .execute(&mut conn) // Use &mut * here
+        .await?;
+    Ok(())
 }

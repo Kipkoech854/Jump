@@ -1,0 +1,8 @@
+/target
+.env
+/migrations
+/Cargo.lock
+**/*.rs.bk
+*.db
+*.sqlite
+*.sqlite3
