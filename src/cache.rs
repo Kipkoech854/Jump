@@ -116,3 +116,13 @@ pub async fn cleanup_old_entries() -> Result<(), Box<dyn Error>> {
         .await?;
     Ok(())
 }
+
+pub asyn fn fetch_return_path() -> Result<Vec<StoredCache>, Box<dyn, Error>>{
+  let mut conn = SqliteConnection::connect(&get_db_url()).await?;
+  let cache = sqlx::query!("SELECT * FROM store_cache ORDER BY last_visited DESC
+        .fetch_one(&mut conn)
+        .await?;
+
+  Ok(cache)
+  
+}
